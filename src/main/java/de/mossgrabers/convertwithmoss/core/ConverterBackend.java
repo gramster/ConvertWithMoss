@@ -37,6 +37,8 @@ import de.mossgrabers.convertwithmoss.format.bliss.BlissCreator;
 import de.mossgrabers.convertwithmoss.format.bliss.BlissDetector;
 import de.mossgrabers.convertwithmoss.format.decentsampler.DecentSamplerCreator;
 import de.mossgrabers.convertwithmoss.format.decentsampler.DecentSamplerDetector;
+import de.mossgrabers.convertwithmoss.format.deluge.DelugeCreator;
+import de.mossgrabers.convertwithmoss.format.deluge.DelugeDetector;
 import de.mossgrabers.convertwithmoss.format.disting.DistingExCreator;
 import de.mossgrabers.convertwithmoss.format.disting.DistingExDetector;
 import de.mossgrabers.convertwithmoss.format.exs.EXS24Creator;
@@ -118,6 +120,7 @@ public class ConverterBackend
             new BlissDetector (notifier),
             new TX16WxDetector (notifier),
             new DecentSamplerDetector (notifier),
+            new DelugeDetector (notifier),
             new DistingExDetector (notifier),
             new IsoDetector (notifier),
             new KontaktDetector (notifier),
@@ -144,6 +147,7 @@ public class ConverterBackend
             new BlissCreator (notifier),
             new TX16WxCreator (notifier),
             new DecentSamplerCreator (notifier),
+            new DelugeCreator (notifier),
             new DistingExCreator (notifier),
             new KontaktCreator (notifier),
             new KMPCreator (notifier),
