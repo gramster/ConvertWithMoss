@@ -50,7 +50,7 @@ import de.mossgrabers.tools.XMLUtils;
  */
 public class DelugeDetector extends AbstractDetector<MetadataSettingsUI>
 {
-    private static final String ENDING_XML        = ".XML";
+    private static final String ENDING_XML        = ".xml";
     private static final String SAMPLES_FOLDER    = "SAMPLES";
 
     /** Maximum envelope time in seconds used for normalizing Deluge hex values. */
