@@ -23,6 +23,7 @@ import de.mossgrabers.convertwithmoss.core.algorithm.MathUtils;
 import de.mossgrabers.convertwithmoss.core.detector.AbstractDetector;
 import de.mossgrabers.convertwithmoss.core.detector.DefaultMultisampleSource;
 import de.mossgrabers.convertwithmoss.core.model.IEnvelope;
+import de.mossgrabers.convertwithmoss.core.model.IEnvelopeModulator;
 import de.mossgrabers.convertwithmoss.core.model.IFilter;
 import de.mossgrabers.convertwithmoss.core.model.IGroup;
 import de.mossgrabers.convertwithmoss.core.model.ISampleData;
@@ -146,6 +147,9 @@ public class DelugeDetector extends AbstractDetector<MetadataSettingsUI>
 
         // Process filter settings
         processFilterSettings (top, multisampleSource);
+
+        // Process filter envelope settings (envelope2)
+        processFilterEnvelopeSettings (top, multisampleSource);
 
         this.createMetadata (multisampleSource.getMetadata (), this.getFirstSample (multisampleSource.getGroups ()), parts);
         return Collections.singletonList (multisampleSource);
@@ -411,6 +415,112 @@ public class DelugeDetector extends AbstractDetector<MetadataSettingsUI>
             multisampleSource.setGlobalFilter (new DefaultFilter (FilterType.HIGH_PASS, 4,
                 MathUtils.denormalizeFrequency (cutoff, IFilter.MAX_FREQUENCY),
                 resonance));
+        }
+    }
+
+
+    /**
+     * Process filter envelope settings (envelope2) from the XML file.
+     *
+     * @param rootElement The root element
+     * @param multisampleSource The multisample source with the global filter to apply envelope to
+     */
+    private static void processFilterEnvelopeSettings (final Element rootElement, final IMultisampleSource multisampleSource)
+    {
+        final Optional<IFilter> optFilter = multisampleSource.getGlobalFilter ();
+        if (optFilter.isEmpty ())
+            return;
+
+        final Element defaultParamsElement = XMLUtils.getChildElementByName (rootElement, DelugeTag.DEFAULT_PARAMS);
+        if (defaultParamsElement == null)
+            return;
+
+        final Element envelope2Element = XMLUtils.getChildElementByName (defaultParamsElement, DelugeTag.ENVELOPE2);
+        if (envelope2Element == null)
+            return;
+
+        final IEnvelopeModulator cutoffModulator = optFilter.get ().getCutoffEnvelopeModulator ();
+        final IEnvelope filterEnvelope = cutoffModulator.getSource ();
+
+        final String attackStr = envelope2Element.getAttribute (DelugeTag.ATTACK);
+        final String decayStr = envelope2Element.getAttribute (DelugeTag.DECAY);
+        final String sustainStr = envelope2Element.getAttribute (DelugeTag.SUSTAIN);
+        final String releaseStr = envelope2Element.getAttribute (DelugeTag.RELEASE);
+
+        if (attackStr != null && !attackStr.isBlank ())
+            filterEnvelope.setAttackTime (DelugeEnvelope.hexToAttackTime (attackStr));
+
+        if (decayStr != null && !decayStr.isBlank ())
+            filterEnvelope.setDecayTime (DelugeEnvelope.hexToReleaseTime (decayStr));
+
+        if (sustainStr != null && !sustainStr.isBlank ())
+            filterEnvelope.setSustainLevel (DelugeEnvelope.hexToSustainLevel (sustainStr));
+
+        if (releaseStr != null && !releaseStr.isBlank ())
+            filterEnvelope.setReleaseTime (DelugeEnvelope.hexToReleaseTime (releaseStr));
+
+        // Read modulation depth from patch cable: envelope2 -> lpfFrequency or hpfFrequency
+        final double depth = readEnvelope2PatchCableDepth (defaultParamsElement, optFilter.get ().getType ());
+        cutoffModulator.setDepth (depth);
+    }
+
+
+    /**
+     * Read the envelope2 to filter frequency patch cable amount.
+     *
+     * @param defaultParamsElement The defaultParams element
+     * @param filterType The type of filter to determine the destination
+     * @return The modulation depth in the range [-1..1], or 0 if not found
+     */
+    private static double readEnvelope2PatchCableDepth (final Element defaultParamsElement, final FilterType filterType)
+    {
+        final Element patchCablesElement = XMLUtils.getChildElementByName (defaultParamsElement, DelugeTag.PATCH_CABLES);
+        if (patchCablesElement == null)
+            return 0;
+
+        final String destination = filterType == FilterType.HIGH_PASS ? "hpfFrequency" : "lpfFrequency";
+
+        for (final Element patchCable: XMLUtils.getChildElementsByName (patchCablesElement, DelugeTag.PATCH_CABLE, false))
+        {
+            final String source = patchCable.getAttribute (DelugeTag.SOURCE);
+            final String dest = patchCable.getAttribute (DelugeTag.DESTINATION);
+            if ("envelope2".equals (source) && destination.equals (dest))
+            {
+                final String amountStr = patchCable.getAttribute (DelugeTag.AMOUNT);
+                if (amountStr != null && !amountStr.isBlank ())
+                    return convertHexToSignedValue (amountStr);
+            }
+        }
+        return 0;
+    }
+
+
+    /**
+     * Convert a hex string value to a signed normalized value in the range [-1..1]. The Deluge uses
+     * signed 32-bit hex values where 0x80000000 maps to -1.0 and 0x7FFFFFFF maps to 1.0.
+     *
+     * @param hexValue The hex string value
+     * @return The signed normalized value
+     */
+    static double convertHexToSignedValue (final String hexValue)
+    {
+        if (hexValue == null || hexValue.isBlank ())
+            return 0.0;
+
+        try
+        {
+            long value = Long.parseLong (hexValue.replace ("0x", "").replace ("0X", ""), 16);
+
+            // Convert to signed 32-bit integer if necessary
+            if ((value & 0x80000000L) != 0)
+                value = value - 0x100000000L;
+
+            // Normalize to -1..1 range
+            return value / 2147483647.0;
+        }
+        catch (final NumberFormatException ex)
+        {
+            return 0.0;
         }
     }
 

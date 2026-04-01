@@ -23,6 +23,7 @@ import de.mossgrabers.convertwithmoss.core.algorithm.MathUtils;
 import de.mossgrabers.convertwithmoss.core.creator.AbstractWavCreator;
 import de.mossgrabers.convertwithmoss.core.creator.DestinationAudioFormat;
 import de.mossgrabers.convertwithmoss.core.model.IEnvelope;
+import de.mossgrabers.convertwithmoss.core.model.IEnvelopeModulator;
 import de.mossgrabers.convertwithmoss.core.model.IFilter;
 import de.mossgrabers.convertwithmoss.core.model.IGroup;
 import de.mossgrabers.convertwithmoss.core.model.ISampleLoop;
@@ -252,12 +253,24 @@ public class DelugeCreator extends AbstractWavCreator<DelugeCreatorUI>
             envelope1Element.setAttribute (DelugeTag.RELEASE, DelugeEnvelope.releaseTimeToHex (amplitudeEnvelope.getReleaseTime ()));
         }
 
-        // Add a second envelope with defaults
+        // Add filter envelope (envelope2)
         final Element envelope2Element = XMLUtils.addElement (document, defaultParamsElement, DelugeTag.ENVELOPE2);
-        envelope2Element.setAttribute (DelugeTag.ATTACK, "0xE6666654");
-        envelope2Element.setAttribute (DelugeTag.DECAY, "0xE6666654");
-        envelope2Element.setAttribute (DelugeTag.SUSTAIN, "0xFFFFFFE9");
-        envelope2Element.setAttribute (DelugeTag.RELEASE, "0xE6666654");
+        if (optFilter.isPresent ())
+        {
+            final IEnvelopeModulator cutoffModulator = optFilter.get ().getCutoffEnvelopeModulator ();
+            final IEnvelope filterEnvelope = cutoffModulator.getSource ();
+            envelope2Element.setAttribute (DelugeTag.ATTACK, DelugeEnvelope.attackTimeToHex (filterEnvelope.getAttackTime ()));
+            envelope2Element.setAttribute (DelugeTag.DECAY, DelugeEnvelope.releaseTimeToHex (filterEnvelope.getDecayTime ()));
+            envelope2Element.setAttribute (DelugeTag.SUSTAIN, DelugeEnvelope.sustainLevelToHex (filterEnvelope.getSustainLevel ()));
+            envelope2Element.setAttribute (DelugeTag.RELEASE, DelugeEnvelope.releaseTimeToHex (filterEnvelope.getReleaseTime ()));
+        }
+        else
+        {
+            envelope2Element.setAttribute (DelugeTag.ATTACK, "0xE6666654");
+            envelope2Element.setAttribute (DelugeTag.DECAY, "0xE6666654");
+            envelope2Element.setAttribute (DelugeTag.SUSTAIN, "0xFFFFFFE9");
+            envelope2Element.setAttribute (DelugeTag.RELEASE, "0xE6666654");
+        }
 
         // Add velocity to volume patch cable
         final Element patchCablesElement = XMLUtils.addElement (document, defaultParamsElement, DelugeTag.PATCH_CABLES);
@@ -265,6 +278,20 @@ public class DelugeCreator extends AbstractWavCreator<DelugeCreatorUI>
         patchCableElement.setAttribute (DelugeTag.SOURCE, "velocity");
         patchCableElement.setAttribute (DelugeTag.DESTINATION, "volume");
         patchCableElement.setAttribute (DelugeTag.AMOUNT, "0x3FFFFFE8");
+
+        // Add envelope2 to filter frequency patch cable if filter has modulation depth
+        if (optFilter.isPresent ())
+        {
+            final double depth = optFilter.get ().getCutoffEnvelopeModulator ().getDepth ();
+            if (depth != 0)
+            {
+                final String destination = optFilter.get ().getType () == FilterType.HIGH_PASS ? "hpfFrequency" : "lpfFrequency";
+                final Element envPatchCableElement = XMLUtils.addElement (document, patchCablesElement, DelugeTag.PATCH_CABLE);
+                envPatchCableElement.setAttribute (DelugeTag.SOURCE, "envelope2");
+                envPatchCableElement.setAttribute (DelugeTag.DESTINATION, destination);
+                envPatchCableElement.setAttribute (DelugeTag.AMOUNT, convertSignedToHex (depth));
+            }
+        }
 
         // Add default equalizer
         final Element equalizerElement = XMLUtils.addElement (document, defaultParamsElement, DelugeTag.EQUALIZER);
@@ -597,6 +624,22 @@ public class DelugeCreator extends AbstractWavCreator<DelugeCreatorUI>
     {
         final double clamped = Math.clamp (value, 0.0, 1.0);
         final int intValue = (int) Math.round ((clamped * 2 - 1) * 0x7FFFFFFF);
+        return String.format ("0x%08X", intValue);
+    }
+
+
+    /**
+     * Convert a signed value (-1 to 1) to a hex string in the format used by Deluge. The Deluge
+     * uses signed 32-bit hex values where 0x80000000 represents -1.0 and 0x7FFFFFFF represents
+     * 1.0.
+     *
+     * @param value The signed value (-1 to 1)
+     * @return The hex string
+     */
+    private static String convertSignedToHex (final double value)
+    {
+        final double clamped = Math.clamp (value, -1.0, 1.0);
+        final int intValue = (int) Math.round (clamped * 0x7FFFFFFF);
         return String.format ("0x%08X", intValue);
     }
 }
