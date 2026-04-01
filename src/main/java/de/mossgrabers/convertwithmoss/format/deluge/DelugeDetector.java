@@ -51,7 +51,6 @@ import de.mossgrabers.tools.XMLUtils;
 public class DelugeDetector extends AbstractDetector<MetadataSettingsUI>
 {
     private static final String ENDING_XML        = ".xml";
-    private static final String SAMPLES_FOLDER    = "SAMPLES";
 
     /** Maximum envelope time in seconds used for normalizing Deluge hex values. */
     private static final double MAX_ENVELOPE_TIME = 20.0;
@@ -113,6 +112,9 @@ public class DelugeDetector extends AbstractDetector<MetadataSettingsUI>
         if (oscType != null && !oscType.isBlank () && !"sample".equals (oscType))
             return Collections.emptyList ();
 
+        // Read the loop mode from the oscillator level
+        final String loopMode = osc1Element.getAttribute (DelugeTag.LOOP_MODE);
+
         // Get the sample ranges
         final Element sampleRangesElement = XMLUtils.getChildElementByName (osc1Element, DelugeTag.SAMPLE_RANGES);
         if (sampleRangesElement == null)
@@ -134,7 +136,7 @@ public class DelugeDetector extends AbstractDetector<MetadataSettingsUI>
         // Process each sample range
         for (final Element sampleRangeElement: sampleRangeElements)
         {
-            final Optional<ISampleZone> optZone = this.createSampleZone (multisampleSource, sampleRangeElement, basePath);
+            final Optional<ISampleZone> optZone = this.createSampleZone (multisampleSource, sampleRangeElement, basePath, loopMode);
             if (optZone.isPresent ())
                 group.addSampleZone (optZone.get ());
         }
@@ -159,9 +161,10 @@ public class DelugeDetector extends AbstractDetector<MetadataSettingsUI>
      * @param multisampleSource The multisample source
      * @param sampleRangeElement The sample range element
      * @param basePath The base path for resolving sample file paths
+     * @param loopMode The oscillator-level loop mode (0=CUT, 1=ONCE, 2=LOOP, 3=STRETCH)
      * @return The sample zone, if successful
      */
-    private Optional<ISampleZone> createSampleZone (final IMultisampleSource multisampleSource, final Element sampleRangeElement, final String basePath)
+    private Optional<ISampleZone> createSampleZone (final IMultisampleSource multisampleSource, final Element sampleRangeElement, final String basePath, final String loopMode)
     {
         // Try attribute first, then child element (older Deluge firmware uses child elements)
         String fileName = sampleRangeElement.getAttribute (DelugeTag.FILE_NAME);
@@ -220,10 +223,14 @@ public class DelugeDetector extends AbstractDetector<MetadataSettingsUI>
 
         // Process zone settings (sample start/end and loop points)
         final Element zoneElement = XMLUtils.getChildElementByName (sampleRangeElement, DelugeTag.ZONE);
+        int startSamplePos = 0;
+        int endSamplePos = -1;
+        boolean hasExplicitLoopPoints = false;
+
         if (zoneElement != null)
         {
-            final int startSamplePos = readIntParam (zoneElement, DelugeTag.START_SAMPLE_POS, 0);
-            final int endSamplePos = readIntParam (zoneElement, DelugeTag.END_SAMPLE_POS, -1);
+            startSamplePos = readIntParam (zoneElement, DelugeTag.START_SAMPLE_POS, 0);
+            endSamplePos = readIntParam (zoneElement, DelugeTag.END_SAMPLE_POS, -1);
             final int startLoopPos = readIntParam (zoneElement, DelugeTag.START_LOOP_POS, -1);
             final int endLoopPos = readIntParam (zoneElement, DelugeTag.END_LOOP_POS, -1);
 
@@ -231,7 +238,7 @@ public class DelugeDetector extends AbstractDetector<MetadataSettingsUI>
             if (endSamplePos > 0)
                 sampleZone.setStop (endSamplePos);
 
-            // Add loop if loop points are defined
+            // Add loop if explicit loop points are defined
             if (startLoopPos >= 0 && endLoopPos > startLoopPos)
             {
                 final ISampleLoop loop = new DefaultSampleLoop ();
@@ -239,7 +246,18 @@ public class DelugeDetector extends AbstractDetector<MetadataSettingsUI>
                 loop.setStart (startLoopPos);
                 loop.setEnd (endLoopPos);
                 sampleZone.addLoop (loop);
+                hasExplicitLoopPoints = true;
             }
+        }
+
+        // If oscillator loopMode is LOOP but no explicit loop points, loop the entire sample
+        if (!hasExplicitLoopPoints && DelugeTag.LOOP_MODE_LOOP.equals (loopMode) && endSamplePos > startSamplePos)
+        {
+            final ISampleLoop loop = new DefaultSampleLoop ();
+            loop.setType (LoopType.FORWARDS);
+            loop.setStart (startSamplePos);
+            loop.setEnd (endSamplePos);
+            sampleZone.addLoop (loop);
         }
 
         // Check if the sample is reversed
@@ -259,22 +277,18 @@ public class DelugeDetector extends AbstractDetector<MetadataSettingsUI>
      */
     private static File resolveSampleFile (final String fileName, final String basePath)
     {
-        // Try relative to the XML file location
+        // Try relative to the XML file location (handles ../SAMPLES/... paths)
         File sampleFile = new File (basePath, fileName);
         if (sampleFile.exists ())
             return sampleFile;
 
-        // Try in a SAMPLES folder at the same level as the SYNTHS folder
+        // Try relative to the parent of the SYNTHS folder (handles SAMPLES/... paths from SD root)
         final File parentFolder = new File (basePath).getParentFile ();
         if (parentFolder != null)
         {
-            final File samplesFolder = new File (parentFolder, SAMPLES_FOLDER);
-            if (samplesFolder.exists ())
-            {
-                sampleFile = new File (samplesFolder, fileName);
-                if (sampleFile.exists ())
-                    return sampleFile;
-            }
+            sampleFile = new File (parentFolder, fileName);
+            if (sampleFile.exists ())
+                return sampleFile;
         }
 
         return null;

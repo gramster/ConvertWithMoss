@@ -17,6 +17,7 @@ import de.mossgrabers.tools.ui.panel.BoxPanel;
 import javafx.geometry.Orientation;
 import javafx.scene.Node;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.TextField;
 
 
 /**
@@ -28,11 +29,14 @@ public class DelugeCreatorUI extends WavChunkSettingsUI
 {
     private static final String DELUGE_LIMIT_TO_16_441   = "DelugeLimitTo16441";
     private static final String DELUGE_TRIM_START_TO_END = "DelugeTrimStartToEnd";
+    private static final String DELUGE_SAMPLES_SUBFOLDER = "DelugeSamplesSubfolder";
 
     private CheckBox            limitTo16441CheckBox;
     private CheckBox            trimStartToEndCheckBox;
+    private TextField           samplesSubfolderField;
     private boolean             limitTo16441;
     private boolean             trimStartToEnd;
+    private String              samplesSubfolder;
 
 
     /**
@@ -56,6 +60,7 @@ public class DelugeCreatorUI extends WavChunkSettingsUI
 
         this.limitTo16441CheckBox = panel.createCheckBox ("@IDS_DELUGE_RESAMPLE_TO_16_441");
         this.trimStartToEndCheckBox = panel.createCheckBox ("@IDS_DELUGE_TRIM_START_TO_END");
+        this.samplesSubfolderField = panel.createField ("@IDS_DELUGE_SAMPLES_SUBFOLDER");
 
         final TitledSeparator separator = this.addWavChunkOptions (panel);
         separator.getStyleClass ().add ("titled-separator-pane");
@@ -70,6 +75,7 @@ public class DelugeCreatorUI extends WavChunkSettingsUI
     {
         this.limitTo16441CheckBox.setSelected (config.getBoolean (DELUGE_LIMIT_TO_16_441, true));
         this.trimStartToEndCheckBox.setSelected (config.getBoolean (DELUGE_TRIM_START_TO_END, true));
+        this.samplesSubfolderField.setText (config.getProperty (DELUGE_SAMPLES_SUBFOLDER, ""));
 
         super.loadSettings (config);
     }
@@ -81,6 +87,7 @@ public class DelugeCreatorUI extends WavChunkSettingsUI
     {
         config.setBoolean (DELUGE_LIMIT_TO_16_441, this.limitTo16441CheckBox.isSelected ());
         config.setBoolean (DELUGE_TRIM_START_TO_END, this.trimStartToEndCheckBox.isSelected ());
+        config.setProperty (DELUGE_SAMPLES_SUBFOLDER, this.samplesSubfolderField.getText ());
 
         super.saveSettings (config);
     }
@@ -95,6 +102,7 @@ public class DelugeCreatorUI extends WavChunkSettingsUI
 
         this.limitTo16441 = this.limitTo16441CheckBox.isSelected ();
         this.trimStartToEnd = this.trimStartToEndCheckBox.isSelected ();
+        this.samplesSubfolder = this.samplesSubfolderField.getText ().trim ();
         return true;
     }
 
@@ -112,6 +120,9 @@ public class DelugeCreatorUI extends WavChunkSettingsUI
         value = parameters.remove (DELUGE_TRIM_START_TO_END);
         this.trimStartToEnd = "1".equals (value);
 
+        value = parameters.remove (DELUGE_SAMPLES_SUBFOLDER);
+        this.samplesSubfolder = value == null ? "" : value.trim ();
+
         return true;
     }
 
@@ -123,6 +134,7 @@ public class DelugeCreatorUI extends WavChunkSettingsUI
         final List<String> parameterNames = new ArrayList<> (Arrays.asList (super.getCLIParameterNames ()));
         parameterNames.add (DELUGE_LIMIT_TO_16_441);
         parameterNames.add (DELUGE_TRIM_START_TO_END);
+        parameterNames.add (DELUGE_SAMPLES_SUBFOLDER);
         return parameterNames.toArray (new String [parameterNames.size ()]);
     }
 
@@ -146,5 +158,16 @@ public class DelugeCreatorUI extends WavChunkSettingsUI
     public boolean limitTo16441 ()
     {
         return this.limitTo16441;
+    }
+
+
+    /**
+     * Get the subfolder name under SAMPLES where samples should be stored.
+     *
+     * @return The subfolder name, may be empty
+     */
+    public String getSamplesSubfolder ()
+    {
+        return this.samplesSubfolder;
     }
 }
