@@ -27,10 +27,13 @@ import de.mossgrabers.convertwithmoss.core.model.implementation.DefaultEnvelope;
 import de.mossgrabers.convertwithmoss.format.ableton.AbletonCreator;
 import de.mossgrabers.convertwithmoss.format.ableton.AbletonDetector;
 import de.mossgrabers.convertwithmoss.format.akai.akp.AkpDetector;
+import de.mossgrabers.convertwithmoss.format.akai.mesa.AkaiMesaDetector;
 import de.mossgrabers.convertwithmoss.format.akai.mpc.xpm.MPCKeygroupCreator;
 import de.mossgrabers.convertwithmoss.format.akai.mpc.xpm.MPCKeygroupDetector;
 import de.mossgrabers.convertwithmoss.format.akai.mpc.xty.XtyDetector;
-import de.mossgrabers.convertwithmoss.format.akai.s3p.AkaiS3pDetector;
+import de.mossgrabers.convertwithmoss.format.akai.mpc1000.AkaiMPC1000Detector;
+import de.mossgrabers.convertwithmoss.format.akai.s1000.AkaiS1000Detector;
+import de.mossgrabers.convertwithmoss.format.akai.s900.AkaiS900Detector;
 import de.mossgrabers.convertwithmoss.format.bitwig.BitwigMultisampleCreator;
 import de.mossgrabers.convertwithmoss.format.bitwig.BitwigMultisampleDetector;
 import de.mossgrabers.convertwithmoss.format.bliss.BlissCreator;
@@ -113,9 +116,12 @@ public class ConverterBackend
             new Music1010Detector (notifier),
             new AbletonDetector (notifier),
             new AkpDetector (notifier),
+            new AkaiMesaDetector (notifier),
             new MPCKeygroupDetector (notifier),
             new XtyDetector (notifier),
-            new AkaiS3pDetector (notifier),
+            new AkaiMPC1000Detector (notifier),
+            new AkaiS900Detector (notifier),
+            new AkaiS1000Detector (notifier),
             new BitwigMultisampleDetector (notifier),
             new BlissDetector (notifier),
             new TX16WxDetector (notifier),
@@ -353,7 +359,7 @@ public class ConverterBackend
         {
             final List<IGroup> groups = multisampleSource.getNonEmptyGroups (false);
 
-            /////////////////////////////////////////////////////////////////////////////////////////////////////////
+            //////////////////////////////////////////////////////////////////////////////////////////
             // Combine split-mono samples to stereo samples if necessary for further processing
 
             final boolean hasMaximumNumberOfSamples = this.detectionSettings.maxNumberOfSamples > 0;
@@ -363,14 +369,14 @@ public class ConverterBackend
                 final Optional<IGroup> stereoGroup = ZoneChannels.combineSplitStereo (groups);
                 if (stereoGroup.isPresent ())
                 {
-                    this.notifier.log ("IDS_NOTIFY_COMBINED_TO_STEREO");
                     groups.clear ();
                     groups.add (stereoGroup.get ());
                 }
-                this.notifier.logError ("IDS_NOTIFY_NOT_COMBINED_TO_STEREO");
+                else
+                    this.notifier.logError ("IDS_NOTIFY_NOT_COMBINED_TO_STEREO");
             }
 
-            /////////////////////////////////////////////////////////////////////////////////////////////////////////
+            //////////////////////////////////////////////////////////////////////////////////////////
             // Reduce the number of samples if necessary
 
             if (hasMaximumNumberOfSamples && MultiSampleReducer.reduce (groups, this.detectionSettings.maxNumberOfSamples) > 0)
@@ -380,38 +386,26 @@ public class ConverterBackend
                 for (final IGroup group: groups)
                     if (!group.getSampleZones ().isEmpty ())
                         finalGroups.add (group);
-                this.notifier.logError ("IDS_NOTIFY_REDUCED_TO_NUM_SAMPLES", Integer.toString (this.detectionSettings.maxNumberOfSamples));
+                groups.clear ();
+                groups.addAll (finalGroups);
+                this.notifier.log ("IDS_NOTIFY_REDUCED_TO_NUM_SAMPLES", Integer.toString (this.detectionSettings.maxNumberOfSamples));
             }
+            multisampleSource.setGroups (groups);
 
             final List<ISampleZone> sampleZones = new ArrayList<> ();
             for (final IGroup group: groups)
                 sampleZones.addAll (group.getSampleZones ());
 
-            if (this.detectionSettings.enableNormalize)
-            {
-                this.notifier.logText (" ");
-                this.notifier.log ("IDS_PROCESSING_NORMALIZING");
-            }
             if (this.detectionSettings.enableMakeMono)
-            {
-                this.notifier.logText (" ");
                 this.notifier.log ("IDS_PROCESSING_MAKE_MONO");
-            }
             if (this.detectionSettings.enableTrimSample)
-            {
-                this.notifier.logText (" ");
                 this.notifier.log ("IDS_PROCESSING_TRIM");
-            }
             if (this.detectionSettings.reduceBitDepth > 0)
-            {
-                this.notifier.logText (" ");
-                this.notifier.log ("IDS_PROCESSING_REDUCE_BIT_DEPTH", Integer.toString (this.detectionSettings.reduceBitDepth));
-            }
+                this.notifier.log ("IDS_PROCESSING_REDUCE_BIT_DEPTH_TO", Integer.toString (this.detectionSettings.reduceBitDepth));
             if (this.detectionSettings.reduceFrequency > 0)
-            {
-                this.notifier.logText (" ");
-                this.notifier.log ("IDS_PROCESSING_REDUCE_FREQUENCY", Integer.toString (this.detectionSettings.reduceFrequency));
-            }
+                this.notifier.log ("IDS_PROCESSING_REDUCE_FREQUENCY_TO", Integer.toString (this.detectionSettings.reduceFrequency));
+            if (this.detectionSettings.enableNormalize)
+                this.notifier.log ("IDS_PROCESSING_NORMALIZING");
             this.notifier.log ("IDS_NOTIFY_LINE_FEED");
             AudioSampleReducer.reduceSamples (sampleZones, this.detectionSettings.enableMakeMono, this.detectionSettings.enableTrimSample, this.detectionSettings.reduceBitDepth, this.detectionSettings.reduceFrequency, this.detectionSettings.enableNormalize);
         }
