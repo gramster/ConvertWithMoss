@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
@@ -54,6 +55,7 @@ import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
@@ -177,7 +179,7 @@ public class MainFrame extends AbstractFrame implements INotifier
         this.settingsButton = setupButton (lowerButtonPanel, "Settings", "@IDS_MAIN_SETTINGS", "@IDS_MAIN_SETTINGS_TOOLTIP");
         this.settingsButton.setOnAction (_ -> this.openSettings ());
 
-        /////////////////////////////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////////
         // Source pane
 
         this.sourceFolderSelectButton = new Button (Functions.getText ("@IDS_MAIN_SELECT_SOURCE"));
@@ -197,6 +199,7 @@ public class MainFrame extends AbstractFrame implements INotifier
             final ICoreTaskSettings userInterface = detector.getSettings ();
             final Tab tab = new Tab (detector.getName (), userInterface.getEditPane ());
             tab.setClosable (false);
+            tab.setTooltip (new Tooltip (formatFileEndings (detector.getFileEndings ())));
             tabs.add (tab);
             this.sourceTabs.put (tab, detector);
         }
@@ -205,7 +208,7 @@ public class MainFrame extends AbstractFrame implements INotifier
         final BorderPane sourcePane = new BorderPane (this.sourceTabPane);
         sourcePane.setTop (sourceUpperPane.getPane ());
 
-        /////////////////////////////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////////
         // Destination pane
 
         final BorderPane destinationFolderPanel = new BorderPane (this.destinationPathField);
@@ -248,8 +251,12 @@ public class MainFrame extends AbstractFrame implements INotifier
         HBox.setHgrow (destinationPane, Priority.ALWAYS);
 
         final BorderPane buttonColumn = new BorderPane ();
-        buttonColumn.setCenter (upperButtonPanel.getPane ());
-        buttonColumn.setBottom (lowerButtonPanel.getPane ());
+        final Pane upperButtonPane = upperButtonPanel.getPane ();
+        final Pane lowerButtonPane = lowerButtonPanel.getPane ();
+        upperButtonPane.setMinHeight (300);
+        lowerButtonPane.setMinHeight (110);
+        buttonColumn.setTop (upperButtonPane);
+        buttonColumn.setBottom (lowerButtonPane);
 
         this.mainPane = new BorderPane ();
         this.mainPane.setCenter (grid);
@@ -279,6 +286,19 @@ public class MainFrame extends AbstractFrame implements INotifier
         this.sourcePathField.requestFocus ();
 
         this.configureTraversalManager ();
+    }
+
+
+    private static String formatFileEndings (final Set<String> fileEndings)
+    {
+        final StringBuilder sb = new StringBuilder ();
+        for (final String ending: fileEndings)
+        {
+            if (!sb.isEmpty ())
+                sb.append (", ");
+            sb.append ("*").append (ending);
+        }
+        return sb.toString ();
     }
 
 
@@ -425,7 +445,7 @@ public class MainFrame extends AbstractFrame implements INotifier
      */
     private void loadConfiguration ()
     {
-        //////////////////////////////////////////////////////////
+        //////////////////////////////////////////////////
         // Source configuration
 
         for (int i = 0; i < NUMBER_OF_DIRECTORIES; i++)
@@ -441,7 +461,7 @@ public class MainFrame extends AbstractFrame implements INotifier
         if (!this.sourcePathHistory.isEmpty ())
             this.sourcePathField.getEditor ().setText (this.sourcePathHistory.get (0));
 
-        /////////////////////////////////////////////////////////
+        /////////////////////////////////////////////////
         // Destination Configuration
 
         for (int i = 0; i < NUMBER_OF_DIRECTORIES; i++)
@@ -473,7 +493,7 @@ public class MainFrame extends AbstractFrame implements INotifier
         this.presetLibraryFilename.setText (this.config.getProperty (PRESET_LIBRARY_FILENAME, ""));
         this.performanceLibraryFilename.setText (this.config.getProperty (PERFORMANCE_LIBRARY_FILENAME, ""));
 
-        /////////////////////////////////////////////////////////
+        /////////////////////////////////////////////////
         // Processing
 
         this.detectSettings.enableProcessing = this.config.getBoolean (PROCESSING_ENABLE, false);
@@ -484,7 +504,7 @@ public class MainFrame extends AbstractFrame implements INotifier
         this.detectSettings.reduceBitDepth = this.config.getInteger (PROCESSING_REDUCE_BIT_DEPTH, 0);
         this.detectSettings.reduceFrequency = this.config.getInteger (PROCESSING_REDUCE_FREQUENCY, 0);
 
-        /////////////////////////////////////////////////////////
+        /////////////////////////////////////////////////
         // Options
 
         this.detectSettings.createFolderStructure = this.config.getBoolean (DESTINATION_CREATE_FOLDER_STRUCTURE, true);
@@ -526,7 +546,7 @@ public class MainFrame extends AbstractFrame implements INotifier
         this.config.setProperty (PRESET_LIBRARY_FILENAME, this.presetLibraryFilename.getText ());
         this.config.setProperty (PERFORMANCE_LIBRARY_FILENAME, this.performanceLibraryFilename.getText ());
 
-        /////////////////////////////////////////////////////////
+        /////////////////////////////////////////////////
         // Processing
 
         this.config.setBoolean (PROCESSING_ENABLE, this.detectSettings.enableProcessing);
@@ -537,7 +557,7 @@ public class MainFrame extends AbstractFrame implements INotifier
         this.config.setInteger (PROCESSING_REDUCE_BIT_DEPTH, this.detectSettings.reduceBitDepth);
         this.config.setInteger (PROCESSING_REDUCE_FREQUENCY, this.detectSettings.reduceFrequency);
 
-        /////////////////////////////////////////////////////////
+        /////////////////////////////////////////////////
         // Options
 
         this.config.setBoolean (DESTINATION_CREATE_FOLDER_STRUCTURE, this.detectSettings.createFolderStructure);
@@ -650,6 +670,9 @@ public class MainFrame extends AbstractFrame implements INotifier
         final IDetector<?> detector = this.backend.getDetectors ()[selectedDetector];
         final ICreator<?> creator = this.backend.getCreators ()[selectedCreator];
         if (!detector.getSettings ().checkSettingsUI (this) || !creator.getSettings ().checkSettingsUI (this))
+            return;
+
+        if (this.detectSettings.enableProcessing && !creator.checkProcessingCompatibility (this.detectSettings))
             return;
 
         this.clearLog ();
@@ -766,7 +789,10 @@ public class MainFrame extends AbstractFrame implements INotifier
     {
         final boolean combine = this.combineWithPreviousMessage;
         this.combineWithPreviousMessage = !text.endsWith ("\n");
-        this.logger.info (text, combine);
+        if (this.executePane.isVisible ())
+            this.logger.info (text, combine);
+        else
+            Functions.message (text);
         this.logToFile (text);
     }
 
@@ -818,7 +844,10 @@ public class MainFrame extends AbstractFrame implements INotifier
 
     private void logErrorText (final String message)
     {
-        this.logger.error (message);
+        if (this.executePane.isVisible ())
+            this.logger.error (message);
+        else
+            Functions.error (message, null);
         this.logToFile (message);
     }
 
@@ -919,14 +948,12 @@ public class MainFrame extends AbstractFrame implements INotifier
         try
         {
             final Image icon = Functions.iconFor ("de/mossgrabers/convertwithmoss/images/" + iconName + ".png");
-
             final Button button = panel.createButton (icon, labelName, mnemonic);
             button.alignmentProperty ().set (Pos.CENTER_LEFT);
             button.graphicTextGapProperty ().set (12);
 
             final ImageView image = (ImageView) button.getGraphic ();
             image.setFitWidth (24);
-            // image.setFitHeight (24);
             image.setPreserveRatio (true);
 
             return button;
