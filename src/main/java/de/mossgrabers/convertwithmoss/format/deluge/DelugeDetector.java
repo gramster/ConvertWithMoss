@@ -52,9 +52,6 @@ public class DelugeDetector extends AbstractDetector<MetadataSettingsUI>
 {
     private static final String ENDING_XML        = ".xml";
 
-    /** Maximum envelope time in seconds used for normalizing Deluge hex values. */
-    private static final double MAX_ENVELOPE_TIME = 20.0;
-
 
     /**
      * Constructor.
@@ -355,16 +352,16 @@ public class DelugeDetector extends AbstractDetector<MetadataSettingsUI>
             final String releaseStr = envelope1Element.getAttribute (DelugeTag.RELEASE);
 
             if (attackStr != null && !attackStr.isBlank ())
-                amplitudeEnvelope.setAttackTime (convertHexToEnvelopeTime (attackStr));
+                amplitudeEnvelope.setAttackTime (DelugeEnvelope.hexToAttackTime (attackStr));
 
             if (decayStr != null && !decayStr.isBlank ())
-                amplitudeEnvelope.setDecayTime (convertHexToEnvelopeTime (decayStr));
+                amplitudeEnvelope.setDecayTime (DelugeEnvelope.hexToReleaseTime (decayStr));
 
             if (sustainStr != null && !sustainStr.isBlank ())
-                amplitudeEnvelope.setSustainLevel (convertHexToNormalizedValue (sustainStr));
+                amplitudeEnvelope.setSustainLevel (DelugeEnvelope.hexToSustainLevel (sustainStr));
 
             if (releaseStr != null && !releaseStr.isBlank ())
-                amplitudeEnvelope.setReleaseTime (convertHexToEnvelopeTime (releaseStr));
+                amplitudeEnvelope.setReleaseTime (DelugeEnvelope.hexToReleaseTime (releaseStr));
         }
     }
 
@@ -415,18 +412,6 @@ public class DelugeDetector extends AbstractDetector<MetadataSettingsUI>
                 MathUtils.denormalizeFrequency (cutoff, IFilter.MAX_FREQUENCY),
                 resonance));
         }
-    }
-
-
-    /**
-     * Convert a Deluge hex envelope time value to seconds.
-     *
-     * @param hexValue The hex string value
-     * @return The time in seconds
-     */
-    static double convertHexToEnvelopeTime (final String hexValue)
-    {
-        return convertHexToNormalizedValue (hexValue) * MAX_ENVELOPE_TIME;
     }
 
 

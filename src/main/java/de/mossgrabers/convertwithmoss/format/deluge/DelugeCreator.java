@@ -45,9 +45,6 @@ public class DelugeCreator extends AbstractWavCreator<DelugeCreatorUI>
     }, 44100, true);
     private static final DestinationAudioFormat DEFAULT_AUDIO_FORMAT   = new DestinationAudioFormat ();
 
-    /** Maximum envelope time in seconds, must match the constant in DelugeDetector. */
-    private static final double                 MAX_ENVELOPE_TIME      = 20.0;
-
 
     /**
      * Constructor.
@@ -249,10 +246,10 @@ public class DelugeCreator extends AbstractWavCreator<DelugeCreatorUI>
             final IEnvelope amplitudeEnvelope = zone.getAmplitudeEnvelopeModulator ().getSource ();
 
             final Element envelope1Element = XMLUtils.addElement (document, defaultParamsElement, DelugeTag.ENVELOPE1);
-            envelope1Element.setAttribute (DelugeTag.ATTACK, convertEnvelopeTimeToHex (amplitudeEnvelope.getAttackTime ()));
-            envelope1Element.setAttribute (DelugeTag.DECAY, convertEnvelopeTimeToHex (amplitudeEnvelope.getDecayTime ()));
-            envelope1Element.setAttribute (DelugeTag.SUSTAIN, convertToHex (amplitudeEnvelope.getSustainLevel ()));
-            envelope1Element.setAttribute (DelugeTag.RELEASE, convertEnvelopeTimeToHex (amplitudeEnvelope.getReleaseTime ()));
+            envelope1Element.setAttribute (DelugeTag.ATTACK, DelugeEnvelope.attackTimeToHex (amplitudeEnvelope.getAttackTime ()));
+            envelope1Element.setAttribute (DelugeTag.DECAY, DelugeEnvelope.releaseTimeToHex (amplitudeEnvelope.getDecayTime ()));
+            envelope1Element.setAttribute (DelugeTag.SUSTAIN, DelugeEnvelope.sustainLevelToHex (amplitudeEnvelope.getSustainLevel ()));
+            envelope1Element.setAttribute (DelugeTag.RELEASE, DelugeEnvelope.releaseTimeToHex (amplitudeEnvelope.getReleaseTime ()));
         }
 
         // Add a second envelope with defaults
@@ -586,19 +583,6 @@ public class DelugeCreator extends AbstractWavCreator<DelugeCreatorUI>
                 zoneElement.setAttribute (DelugeTag.END_LOOP_POS, Integer.toString (loopEnd));
             }
         }
-    }
-
-
-    /**
-     * Convert an envelope time in seconds to a Deluge hex string.
-     *
-     * @param timeInSeconds The time in seconds
-     * @return The hex string
-     */
-    private static String convertEnvelopeTimeToHex (final double timeInSeconds)
-    {
-        final double normalized = Math.clamp (timeInSeconds / MAX_ENVELOPE_TIME, 0.0, 1.0);
-        return convertToHex (normalized);
     }
 
 
