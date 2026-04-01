@@ -435,11 +435,17 @@ public class DelugeDetector extends AbstractDetector<MetadataSettingsUI>
         if (defaultParamsElement == null)
             return;
 
+        // Only apply envelope2 if a patch cable actually routes it to the filter frequency
+        final double depth = readEnvelope2PatchCableDepth (defaultParamsElement, optFilter.get ().getType ());
+        if (depth == 0)
+            return;
+
         final Element envelope2Element = XMLUtils.getChildElementByName (defaultParamsElement, DelugeTag.ENVELOPE2);
         if (envelope2Element == null)
             return;
 
         final IEnvelopeModulator cutoffModulator = optFilter.get ().getCutoffEnvelopeModulator ();
+        cutoffModulator.setDepth (depth);
         final IEnvelope filterEnvelope = cutoffModulator.getSource ();
 
         final String attackStr = envelope2Element.getAttribute (DelugeTag.ATTACK);
@@ -458,10 +464,6 @@ public class DelugeDetector extends AbstractDetector<MetadataSettingsUI>
 
         if (releaseStr != null && !releaseStr.isBlank ())
             filterEnvelope.setReleaseTime (DelugeEnvelope.hexToReleaseTime (releaseStr));
-
-        // Read modulation depth from patch cable: envelope2 -> lpfFrequency or hpfFrequency
-        final double depth = readEnvelope2PatchCableDepth (defaultParamsElement, optFilter.get ().getType ());
-        cutoffModulator.setDepth (depth);
     }
 
 
